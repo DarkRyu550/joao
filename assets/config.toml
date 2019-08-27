@@ -1,0 +1,17 @@
+ListenAddress   = "0.0.0.0:6969"
+DatabaseAddress = "127.0.0.1:4456"
+
+[Logging]
+Level = "Trace"
+
+[FilesystemLogger]
+Enabled = true
+
+Name = "Joao"
+
+MaxQueueSize = 67108864
+MaxFileSize  = 67108864
+HistorySize  = 8
+
+Directory = "Logs/"
+

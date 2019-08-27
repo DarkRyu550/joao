@@ -1,0 +1,26 @@
+[package]
+name = "joao"
+version = "0.1.0"
+authors = ["Matheus Branco Borella <dark.ryu.550@gmail.com>"]
+edition = "2018"
+description = """
+Probably only getting penetrated as soon as Milo does.
+https://www.patreon.com/catastrophe
+"""
+
+[dependencies]
+log    = { version = "0.4.8", features = ["std", "serde"] }
+fern   = "0.5.8"
+xz2    = "0.1.6"
+chrono = { version = "0.4.7", features = ["serde"] }
+
+serde        = "^1.0"
+serde_json   = "^1.0"
+serde_derive = "^1.0"
+
+toml   = "0.5.3"
+redis  = "0.11.0"
+http   = "0.1.18"
+
+rocket         = "0.4.2"
+rocket_contrib = "0.4.2"
