@@ -1,10 +1,12 @@
 #[macro_use]
 extern crate log;
+extern crate redis;
 
 const PKG_NAME:    &'static str = env!("CARGO_PKG_NAME");
 const PKG_VERSION: &'static str = env!("CARGO_PKG_VERSION");
 const PKG_TITLE:   &'static str = "The Impenetrable";
 
+mod db;
 mod logger;
 mod settings;
 

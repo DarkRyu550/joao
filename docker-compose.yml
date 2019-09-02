@@ -1,0 +1,11 @@
+version: "2"
+services:
+    redis:
+        image: redis
+    milo:
+        depends_on:
+            - "redis"
+        build: .
+        volumes:
+            - ./assets/config_docker.toml:/milo/config.toml:ro
+            - ./logs:/milo/Logs
