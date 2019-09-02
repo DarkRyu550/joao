@@ -139,7 +139,7 @@ fn main() {
 			settings.filesystem_logger.flush_period.clone()
 		).expect("Could not initialize async flusher");
 
-		dispatch = dispatch.chain(Box::new(fslog.clone()) as Box<log::Log>);
+		dispatch = dispatch.chain(Box::new(fslog.clone()) as Box<dyn log::Log>);
 		Some((fslog, fslog_thread))
 	} else { None };
 
@@ -157,7 +157,7 @@ fn main() {
 	fslog.and_then(|(fslog, fslog_thread)|{
 		fslog.stop();
 		fslog_thread.thread().unpark();
-		fslog_thread.join();
+		fslog_thread.join().expect("fslog thread didn't finish properly");
 
 		Some(())
 	});

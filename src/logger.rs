@@ -153,12 +153,12 @@ impl<P: AsRef<Path> + Send + Sync> FsLogger<P> {
 	}
 }
 impl<P: AsRef<Path> + Send + Sync> log::Log for FsLogger<P> {
-	fn enabled(&self, metadata: &log::Metadata) -> bool {
+	fn enabled(&self, _metadata: &log::Metadata) -> bool {
 		true
 	}
 
 	fn log(&self, record: &log::Record) {
-		let flush = match self.logq.lock() {
+		let _flush = match self.logq.lock() {
 			Ok(mut logq) => {
 				logq.push_back(Record::from_log(record));
 				logq.len() > 0
@@ -244,7 +244,6 @@ use std::sync::Arc;
 fn async_flush<L: log::Log>(logger: Arc<L>, breaks: Arc<AtomicBool>, delay: Duration) {
 	use std::sync::atomic::Ordering;
 	while !breaks.load(Ordering::Relaxed) {
-		use log::Log;
 		logger.flush();
 
 		thread::park_timeout(delay.clone());

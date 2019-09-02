@@ -15,7 +15,6 @@ pub struct FilesystemLogger {
 }
 impl Default for FilesystemLogger {
 	fn default() -> FilesystemLogger {
-		use std::path::PathBuf;
 		FilesystemLogger {
 			enabled:        false,
 			name:           "log".to_owned(),
@@ -57,7 +56,6 @@ pub struct Settings {
 }
 impl Default for Settings {
 	fn default() -> Settings {
-		use std::net::SocketAddr;
 		Settings {
 			listen_address:    SocketAddr::from(([0,   0, 0, 0], 80)),
 			database_address:  SocketAddr::from(([127, 0, 0, 1], 6380)),
