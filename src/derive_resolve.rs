@@ -45,56 +45,68 @@ impl Default for Logging {
 	}
 }
 
-use std::net::{SocketAddr, ToSocketAddrs};
-use std::collections::BTreeMap;
+use std::net::SocketAddr;
+mod serde_resolve {
+	/* NOTE: Due to some idiocy in the way FromStr is implemented for 
+	 * SocketAddr, deserialization cannot resolve any names as it would
+	 * do if you just used address.to_socket_addrs(). */
+	use serde::de::{Deserializer, Deserialize, Visitor, Error};
+	use std::net::SocketAddr;
+	pub fn deserialize<'de, D: Deserializer<'de>>(de: D) 
+		-> Result<SocketAddr, D::Error> {
+		
+		if de.is_human_readable() {
+			struct ResolverVisitor;
+			impl<'de> Visitor<'de> for ResolverVisitor {
+				type Value = SocketAddr;
+
+				fn expecting(&self, format: &mut std::fmt::Formatter) 
+					-> std::fmt::Result {
+					
+					format.write_str("resolvable socket address")
+				}
+
+				fn visit_str<E>(self, s: &str) -> Result<Self::Value, E> 
+					where E: Error {
+					
+					use std::net::ToSocketAddrs;
+					s.to_socket_addrs()
+						.map_err(Error::custom)?
+						.next()
+						.ok_or("no match".to_owned())
+						.map_err(Error::custom)
+				}
+			}
+
+			de.deserialize_str(ResolverVisitor)
+		} else {
+			/* Carry on as usual. */
+			<SocketAddr as Deserialize<'de>>::deserialize(de)
+		}
+	}
+}
+
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase", default)]
 pub struct Settings {
-	pub listen_address: String,
-	pub database_address: String,
-	pub workers: u16,
-	pub keep_alive: u32,
-	pub size_limits: BTreeMap<String, u64>,
+	#[serde(deserialize_with = "serde_resolve::deserialize")]
+	pub listen_address: SocketAddr,
+
+	#[serde(deserialize_with = "serde_resolve::deserialize")]
+	pub database_address: SocketAddr,
+
 	pub logging: Logging,
 	pub filesystem_logger: FilesystemLogger,
 }
 impl Default for Settings {
 	fn default() -> Settings {
 		Settings {
-			listen_address:    "0.0.0.0:80".to_owned(),
-			database_address:  "127.0.0.1:6380".to_owned(),
-			workers:           16,
-			keep_alive:        0,
-			size_limits:       BTreeMap::new(),
+			listen_address:    SocketAddr::from(([0,   0, 0, 0], 80)),
+			database_address:  SocketAddr::from(([127, 0, 0, 1], 6380)),
 			logging:           Default::default(),
 			filesystem_logger: Default::default() 
 		}
-	}
-}
-impl Settings {
-	pub fn listen(&self)
-		-> Result<Option<SocketAddr>, std::io::Error> {
-		
-		self.listen_addrs().map(|mut iter| iter.next())
-	}
-
-	pub fn database(&self)
-		-> Result<Option<SocketAddr>, std::io::Error> {
-		
-		self.database_addrs().map(|mut iter| iter.next())
-	}
-
-
-	pub fn listen_addrs(&self) 
-		-> Result<impl Iterator<Item = SocketAddr>, std::io::Error> {
-		
-		self.listen_address.as_str().to_socket_addrs()
-	}
-
-	pub fn database_addrs(&self) 
-		-> Result<impl Iterator<Item = SocketAddr>, std::io::Error> {
-
-		self.database_address.as_str().to_socket_addrs()
 	}
 }
 

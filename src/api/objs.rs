@@ -59,8 +59,24 @@ pub type TransferResponse = Result<(), TransferError>;
 pub struct HistoryRequest {
 
 }
+#[derive(Debug, Clone, Serialize)]
 pub enum HistoryError {
     /// The given token is not valid.
     InvalidToken,
 }
-pub type HistoryResponse = Result<Vec<Tranfer>, HistoryError>;
+pub type HistoryResponse = Result<Vec<Transfer>, HistoryError>;
+
+
+/* Deposit */
+#[derive(Debug, Clone, Deserialize)]
+pub struct DepositRequest {
+
+}
+#[derive(Debug, Clone, Serialize)]
+pub enum DepositError {
+    /// The given token is not valid.
+    InvalidToken,
+}
+pub type DepositResponse = Result<(), DepositError>;
+
+

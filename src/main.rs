@@ -1,12 +1,21 @@
+#![feature(proc_macro_hygiene)]
+#![feature(decl_macro)]
+
 #[macro_use]
 extern crate log;
-extern crate redis;
+
+#[macro_use]
+extern crate rocket;
+
+#[macro_use]
+extern crate lazy_static;
 
 const PKG_NAME:    &'static str = env!("CARGO_PKG_NAME");
 const PKG_VERSION: &'static str = env!("CARGO_PKG_VERSION");
 const PKG_TITLE:   &'static str = "The Impenetrable";
 
 mod db;
+mod api;
 mod logger;
 mod settings;
 
@@ -77,7 +86,7 @@ fn main() {
 			})
 		.collect::<cmdargs::Arguments>();
 	
-	let settings: settings::Settings = {
+	settings::store({
 		use std::fs::File;
 		let data = match File::open(&args.config) {
 			Ok(mut file) => {
@@ -99,26 +108,19 @@ fn main() {
 
 		toml::from_str(&data)
 			.expect("Could not parse config file")
-	};
+	}).expect("Could not initialize settings");
 
 	/* Initialize logger. */	
 	let mut dispatch = {
-		let sclone = settings.clone();
+		let sclone = settings::settings();
 		fern::Dispatch::new()
 			.format(|fmt, message, record| { 
 				fmt.finish(
 					format_args!("[{}]{}[{}] {}",
 						record.level(),
-						match (record.file(), record.line()) {
-							(Some(file), Some(line)) =>
-								format!("[{}:{}]", file, line),
-							(Some(file), None) =>
-								format!("[{}]", file),
-							(None, Some(line)) =>
-								format!("[Line {}]", line),
-							(None, None) =>
-								"".to_owned()
-						},
+						record.module_path()
+							.map(|path| format!("[{}]", path))
+							.unwrap_or("".to_owned()),
 						record.target(),
 						message)
 				)
@@ -129,7 +131,8 @@ fn main() {
 			.chain(std::io::stderr())
 	};
 	
-	let fslog = if settings.filesystem_logger.enabled {
+	let fslog = if settings::settings().filesystem_logger.enabled {
+		let settings = settings::settings();
 		let (fslog, fslog_thread) = logger::AsyncFlusher::new(
 			logger::FsLogger::new(
 				settings.filesystem_logger.name.clone(),
@@ -149,11 +152,37 @@ fn main() {
 		.expect("Could not initialize logger");
 	
 	trace!("We have a logger!");
-	trace!("Our settings are: {:?}", settings);
 	
 	/* Start up. */
 	info!("{} - {}", PKG_NAME, PKG_TITLE);
 	info!("Version {}", PKG_VERSION);
+
+	debug!("Our settings are: \n{:#?}", settings::settings());
+
+	rocket::custom({
+		let settings = settings::settings();
+
+		use std::net::ToSocketAddrs;
+		let socket = settings.listen_address.to_socket_addrs()
+			.expect("Could not resolve given address")
+			.next()
+			.expect("No adress matching given address");
+
+		use rocket::config::{Config, Environment, LoggingLevel, Limits};
+		Config::build(Environment::Staging)
+			.address(format!("{}", socket.ip()))
+			.port(socket.port())
+			.workers(settings.workers)
+			.keep_alive(settings.keep_alive)
+			.log_level(LoggingLevel::Critical)
+			.limits(
+				settings.size_limits.into_iter()
+					.fold(Limits::new(), |limits, (key, value)|
+						limits.limit(key, value))
+			)
+			.finalize()
+			.expect("Could not build Rocket configuration")
+	}).mount("/", api::routes()).launch();
 
 	/* Shut down filesystem logger. */
 	fslog.and_then(|(fslog, fslog_thread)|{
