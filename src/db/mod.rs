@@ -10,6 +10,8 @@ struct Client<'a> {
 }
 */
 
+//pub fn connect() -> regis::RedisResult<i>
+
 #[derive(Debug)]
 pub enum TransactionStatus {
     Success,
@@ -18,7 +20,12 @@ pub enum TransactionStatus {
     InvalidTo
 }
 
-pub fn bank_transaction(conn: &mut redis::Connection, from: &str, to: &str, amount: u32) -> redis::RedisResult<TransactionStatus> {
+pub fn bank_transaction(
+	conn: &mut redis::Connection, 
+	from: &str, 
+	to: &str, 
+	amount: u32) -> redis::RedisResult<TransactionStatus> {
+
     let script = redis::Script::new(TRANSACTION_SCRIPT);
     let code: u32 = script.key(from).key(to).arg(amount).invoke(conn)?;
     let status = match code {

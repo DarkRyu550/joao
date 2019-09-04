@@ -98,32 +98,3 @@ impl Settings {
 	}
 }
 
-#[derive(Debug)]
-pub enum Error {
-	InvalidDatabase,
-	InvalidListen,
-	Poisoned,
-}
-
-use std::sync::RwLock;
-lazy_static! { 
-	static ref SETTINGS: RwLock<Settings> = RwLock::new(Default::default());
-}
-
-pub fn settings() -> Settings {
-	(*SETTINGS.read().expect("Settings lock has been poisoned")).clone()
-}
-
-pub fn store(new: Settings) -> Result<(), (Settings, Error)> {
-	use std::sync::RwLockWriteGuard;
-	let mut lock: RwLockWriteGuard<Settings> = match SETTINGS.write() {
-		Ok(lock) => lock,
-		Err(_) => return Err((new, Error::Poisoned))
-	};
-
-	use std::mem;
-	let _ = mem::replace(&mut *lock, new);
-
-	Ok(())
-}
-
