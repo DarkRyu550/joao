@@ -85,7 +85,7 @@ pub struct Settings {
 impl Default for Settings {
 	fn default() -> Settings {
 		Settings {
-			listen_address:    "0.0.0.0:80".to_owned(),
+			listen_address:    "0.0.0.0:6969".to_owned(),
 			database_address:  "127.0.0.1:6380".to_owned(),
 			workers:           16,
 			keep_alive:        0,
