@@ -1,8 +1,10 @@
 use serde_derive::{Serialize, Deserialize};
 
-/// Token object, using 4098 bytes for paranoia.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Token(Vec<u8>);
+pub struct Token {
+    user_id: String,
+    is_admin: bool
+}
 
 /// Repesents an ammount of money.
 /// Limited to u32 due to Redis and Lua 5.1
@@ -20,6 +22,7 @@ pub struct Transfer {
 use rocket_contrib::json::Json;
 use rocket::Response;
 use rocket::http::{Status, ContentType};
+use rocket::request::{FromRequest, Outcome, Request};
 
 mod objs;
 use objs::*;
@@ -41,22 +44,22 @@ pub fn login(param: Json<LoginRequest>) -> Json<LoginResponse> {
 }
 
 #[post("/drop", format = "json", data = "<param>")]
-pub fn drop(param: Json<DropRequest>) -> Json<DropResponse> {
+pub fn drop(token: Token, param: Json<DropRequest>) -> Json<DropResponse> {
     unimplemented!()
 }
 
 #[post("/transfer", format = "json", data = "<param>")]
-pub fn transfer(param: Json<TransferRequest>) -> Json<TransferResponse> {
+pub fn transfer(token: Token, param: Json<TransferRequest>) -> Json<TransferResponse> {
     unimplemented!()
 }
 
-#[get("/history", format = "json", data = "<param>")]
-pub fn history(param: Json<HistoryRequest>) -> Json<HistoryResponse> {
+#[get("/history")]
+pub fn history(token: Token) -> Json<HistoryResponse> {
     unimplemented!()
 }
 
 #[post("/reg/deposit", format = "json", data = "<param>")]
-pub fn deposit(param: Json<DepositRequest>) -> Json<DepositResponse> {
+pub fn deposit(token: Token, param: Json<DepositRequest>) -> Json<DepositResponse> {
     unimplemented!()
 }
 
@@ -64,4 +67,30 @@ pub fn routes() -> Vec<rocket::Route> {
 	routes![home, login, drop, transfer, history, deposit]
 }
 
+#[derive(Debug)]
+pub enum TokenError {
+    Missing,
+    Invalid
+}
 
+fn decode_token(raw: &str) -> Option<Token> {
+    Some(Token {
+        user_id: raw.to_string(),
+        is_admin: true
+    })
+}
+
+impl<'a, 'r> FromRequest<'a, 'r> for Token {
+    type Error = TokenError;
+
+    fn from_request(request: &'a Request<'r>) -> Outcome<Self, Self::Error> {
+        let keys: Vec<_> = request.headers().get("authorization").collect();
+        if keys.len() == 0 {
+            return Outcome::Failure((Status::Unauthorized, TokenError::Missing));
+        }
+        match decode_token(keys[0]) {
+            None => Outcome::Failure((Status::Unauthorized, TokenError::Invalid)),
+            Some(token) => Outcome::Success(token)
+        }
+    }
+}
