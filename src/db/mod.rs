@@ -1,4 +1,6 @@
+pub const NEW_ACCOUNT_SCRIPT: &'static str = include_str!("new_account.lua");
 pub const TRANSACTION_SCRIPT: &'static str = include_str!("transaction.lua");
+pub const INITIAL_BALANCE: u32             = 500;
 
 #[derive(Debug)]
 pub enum TransactionStatus {
@@ -8,11 +10,8 @@ pub enum TransactionStatus {
     InvalidTo
 }
 
-pub fn bank_transaction(
-	conn: &mut redis::Connection, 
-	from: &str, 
-	to: &str, 
-	amount: u32) -> redis::RedisResult<TransactionStatus> {
+pub fn bank_transaction(conn: &mut redis::Connection, from: &str, to: &str, 
+                        amount: u32) -> redis::RedisResult<TransactionStatus> {
 
     let script = redis::Script::new(TRANSACTION_SCRIPT);
     let code: u32 = script.key(from).key(to).arg(amount).invoke(conn)?;
@@ -27,18 +26,44 @@ pub fn bank_transaction(
 }
 
 #[derive(Debug)]
-pub struct LockGuard<'a> {
-	conn: &'a mut redis::Connection,
+pub enum AccountCreationStatus {
+    Success,
+    UserExists,
+    HashFailure
 }
 
-pub fn create_account(
-	username: String,
-	realname: Option<String>,
-	) -> redis::RedisResult<AccountCreationStatus> {
+pub fn create_account(conn: &mut redis::Connection, username: String, password: String)
+    -> redis::RedisResult<AccountCreationStatus> {
+    use bcrypt::{DEFAULT_COST, hash};
+    let password_hash = match hash(password, DEFAULT_COST) {
+        Ok(hash) => hash,
+        Err(_) => return Ok(AccountCreationStatus::HashFailure)
+    };
 
-	let pipe = redis::pipe()
-		.atomic()
-		.cmd("SETNX").arg("new").arg(123)
-		.cmd("SETNX").arg("new").arg(321)
-		.
+    let result: u32 = redis::Script::new(NEW_ACCOUNT_SCRIPT)
+        .key(format!("users:{}:password", username))
+        .key(format!("users:{}:balance", username))
+        .arg(password_hash)
+        .arg(INITIAL_BALANCE)
+        .invoke(conn)?;
+    match result {
+        0 => return Ok(AccountCreationStatus::Success),
+        1 => return Ok(AccountCreationStatus::UserExists),
+        _ => panic!("Invalid status code returned")
+    }
+}
+
+pub fn validate(conn: &mut redis::Connection, username: String,
+                password: String) -> redis::RedisResult<bool> {
+    use redis::Commands;
+    use bcrypt::verify;
+
+    let hash: Option<String> = conn.get(format!("users:{}:password", username))?;
+    
+    Ok(hash.as_ref().and_then(|h| verify(password, h).ok()).unwrap_or(false))
+}
+
+pub fn is_admin(conn: &mut redis::Connection, username: String) -> redis::RedisResult<bool> {
+    use redis::Commands;
+    conn.exists(format!("users:{}:admin", username))
 }
