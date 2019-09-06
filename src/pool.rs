@@ -32,7 +32,7 @@ impl<T: Clone> Pool<T> {
 	}
 }
 impl<T> Pool<T> {
-	pub fn init<F: FnMut(usize) -> T>(nelem: usize, mut generator: F) -> Pool<T> {
+	pub fn generate<F: FnMut(usize) -> T>(nelem: usize, mut generator: F) -> Pool<T> {
 		if nelem == 0 {
 			panic!("Cannot create a pool with zero elements")
 		}
@@ -86,6 +86,12 @@ impl<T> Pool<T> {
 			thread.unpark()
 		}
 	}
+
+	fn wake_one(&self) {
+		if let Ok(thread) = self.sleep.pop() {
+			thread.unpark();
+		}
+	}
 }
 
 pub struct PoolGuard<'a, T> {
@@ -104,7 +110,7 @@ impl<'a, T> Drop for PoolGuard<'a, T> {
 		self.pool.queue.push(a)
 			.expect("Cannot return borrowed value back to pool");
 
-		self.pool.wake_all();
+		self.pool.wake_one();
 	}
 }
 

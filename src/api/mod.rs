@@ -18,11 +18,33 @@ pub struct Transfer {
 }
 
 use rocket_contrib::json::Json;
-use rocket::Response;
+use rocket::{Response, State};
+use rocket::request::{Request, FromRequest, Outcome};
 use rocket::http::{Status, ContentType};
+use crate::state;
+use crate::db;
 
 mod objs;
 use objs::*;
+
+enum ActorError {
+	UnknownUser,
+	InvalidSignature,
+}
+
+struct Actor;
+impl FromRequest for Actor {
+	type Error = ActorError;
+	fn from_request(req: &Request) -> Outcome<Self, Self::Error> {
+		req.guard::<State<state::Server>>()
+			.and_then(|state| {
+				let conn = (*state).db_conn.borrow();
+				match db::validate(&mut *conn) {
+
+				}
+			});
+	}
+}
 
 #[get("/")]
 pub fn home<'a>() -> Response<'a> {
@@ -41,7 +63,7 @@ pub fn login(param: Json<LoginRequest>) -> Json<LoginResponse> {
 }
 
 #[post("/drop", format = "json", data = "<param>")]
-pub fn drop(param: Json<DropRequest>) -> Json<DropResponse> {
+pub fn drop(user: User) -> Json<DropResponse> {
     unimplemented!()
 }
 

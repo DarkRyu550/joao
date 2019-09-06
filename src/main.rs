@@ -25,7 +25,7 @@ fn main() {
 	let args     = cmdargs::parse();
 	let settings = init_settings(&args);
 	let fslogger = init_logger(&settings);
-	
+
 	trace!("We have a logger!");
 	info!("{} - {}", PKG_NAME, PKG_TITLE);
 	info!("Version {}", PKG_VERSION);
@@ -47,12 +47,38 @@ fn main() {
 			.keep_alive(settings.keep_alive)
 			.log_level(LoggingLevel::Critical)
 			.limits(
-				settings.size_limits.into_iter()
-					.fold(Limits::new(), |limits, (key, value)|
-						limits.limit(key, value))
+				settings.size_limits.clone().into_iter()
+					.fold(Limits::new(), |limits, (key, value)| {
+						info!(r#"Defining limit for type "{}" to be {}"#,
+							key, value);
+
+						limits.limit(key, value)
+					})
 			)
 			.finalize()
 			.expect("Could not build Rocket configuration")
+	}).manage({
+		info!("Setting up {} connections to Redis server at redis://{}/{}",
+			settings.workers,
+			settings.database_address,
+			settings.database_id);
+
+		state::Server {
+			db_conn: pool::Pool::generate(settings.workers as usize, |index| {
+				debug!("Opening connection {}/{}", index + 1, settings.workers);
+				
+				let url = format!(
+					"redis://{}/{}",
+					settings.database_address,
+					settings.database_id);
+				
+				redis::Client::open(url.as_str())
+					.expect("Could not connect to database")
+					.get_connection()
+					.expect("Could not acquire database connection")
+			}),
+			settings: settings
+		}
 	}).mount("/", api::routes()).launch();
 
 	/* Shut down filesystem logger. */
