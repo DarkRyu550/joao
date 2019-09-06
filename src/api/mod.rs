@@ -19,8 +19,10 @@ pub struct Transfer {
     ammount: Balance
 }
 
+use super::settings::Auth;
+
 use rocket_contrib::json::Json;
-use rocket::Response;
+use rocket::{Response, State};
 use rocket::http::{Status, ContentType};
 use rocket::request::{FromRequest, Outcome, Request};
 
@@ -39,7 +41,7 @@ pub fn home<'a>() -> Response<'a> {
 }
 
 #[post("/login", format = "json", data = "<param>")]
-pub fn login(param: Json<LoginRequest>) -> Json<LoginResponse> {
+pub fn login(auth: State<Auth>, param: Json<LoginRequest>) -> Json<LoginResponse> {
     unimplemented!()
 }
 
@@ -73,11 +75,12 @@ pub enum TokenError {
     Invalid
 }
 
-fn decode_token(raw: &str) -> Option<Token> {
-    Some(Token {
-        user_id: raw.to_string(),
-        is_admin: true
-    })
+fn decode_token(raw: &str, auth: &Auth) -> Option<Token> {
+    use jwt::{Validation, decode};
+
+    decode::<Token>(raw, auth.secret.as_bytes(), &Validation::new(auth.alg))
+        .ok()
+        .map(|data| data.claims)
 }
 
 impl<'a, 'r> FromRequest<'a, 'r> for Token {
@@ -88,7 +91,8 @@ impl<'a, 'r> FromRequest<'a, 'r> for Token {
         if keys.len() == 0 {
             return Outcome::Failure((Status::Unauthorized, TokenError::Missing));
         }
-        match decode_token(keys[0]) {
+        let auth = request.guard::<State<Auth>>().expect("Unable to obtain state for auth");
+        match decode_token(keys[0], &auth) {
             None => Outcome::Failure((Status::Unauthorized, TokenError::Invalid)),
             Some(token) => Outcome::Success(token)
         }
