@@ -99,6 +99,7 @@ pub fn delete_account(
 		.key(name::user_tokens(&userhash))
 		.key(userhash)
 		.invoke(connection)?)
+}
 
 pub fn validate(conn: &mut redis::Connection, username: String,
                 password: String) -> redis::RedisResult<bool> {
