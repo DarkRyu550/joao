@@ -41,8 +41,19 @@ pub fn home<'a>() -> Response<'a> {
 }
 
 #[post("/login", format = "json", data = "<param>")]
-pub fn login(auth: State<Auth>, param: Json<LoginRequest>) -> Json<LoginResponse> {
-    unimplemented!()
+pub fn login(auth: State<Auth>, param: Json<LoginRequest>) -> LoginResponse {
+    use jwt::{Header, encode};
+    //todo fixme
+    if param.0.username != "admin" || param.0.key != "admin" {
+        return Err(json!({ "success": "false", "error": "invalid username or password" }));
+    }
+    let auth: &Auth = &auth;
+    let token = encode(&Header::new(auth.alg), &Token {
+        user_id: "admin".to_string(),
+        is_admin: true
+    }, auth.secret.as_bytes())
+        .map_err(|_| json!({ "success": false, "error": "failed to sign token" }))?;
+    Ok(json!({ "success": true, "token": token }))
 }
 
 #[post("/drop", format = "json", data = "<param>")]
@@ -78,7 +89,13 @@ pub enum TokenError {
 fn decode_token(raw: &str, auth: &Auth) -> Option<Token> {
     use jwt::{Validation, decode};
 
-    decode::<Token>(raw, auth.secret.as_bytes(), &Validation::new(auth.alg))
+    let validation = Validation {
+        algorithms: vec![auth.alg],
+        validate_exp: false,
+        ..Default::default()
+    };
+
+    decode::<Token>(raw, auth.secret.as_bytes(), &validation)
         .ok()
         .map(|data| data.claims)
 }
