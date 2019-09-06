@@ -14,6 +14,7 @@ extern crate rocket_contrib;
 extern crate lazy_static;
 
 extern crate jsonwebtoken as jwt;
+extern crate bcrypt;
 
 const PKG_NAME:    &'static str = env!("CARGO_PKG_NAME");
 const PKG_VERSION: &'static str = env!("CARGO_PKG_VERSION");

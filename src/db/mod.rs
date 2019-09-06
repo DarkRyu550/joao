@@ -1,6 +1,7 @@
 pub const TRANSACTION_SCRIPT: &'static str = include_str!("transaction.lua");
 pub const NEW_ACCOUNT_SCRIPT: &'static str = include_str!("new_account.lua");
 pub const DEL_ACCOUNT_SCRIPT: &'static str = include_str!("del_account.lua");
+pub const INITIAL_BALANCE: u32             = 500;
 
 mod name {
 	pub fn user_name(userhash: &str) -> String {
@@ -40,11 +41,8 @@ pub enum TransactionStatus {
     InvalidTo
 }
 
-pub fn bank_transaction(
-	conn: &mut redis::Connection, 
-	from: &str, 
-	to: &str, 
-	amount: u32) -> redis::RedisResult<TransactionStatus> {
+pub fn bank_transaction(conn: &mut redis::Connection, from: &str, to: &str, 
+                        amount: u32) -> redis::RedisResult<TransactionStatus> {
 
     let script = redis::Script::new(TRANSACTION_SCRIPT);
     let code: u32 = script.key(from).key(to).arg(amount).invoke(conn)?;
@@ -102,6 +100,19 @@ pub fn delete_account(
 		.key(userhash)
 		.invoke(connection)?)
 
+pub fn validate(conn: &mut redis::Connection, username: String,
+                password: String) -> redis::RedisResult<bool> {
+    use redis::Commands;
+    use bcrypt::verify;
+
+    let hash: Option<String> = conn.get(format!("users:{}:password", username))?;
+    
+    Ok(hash.as_ref().and_then(|h| verify(password, h).ok()).unwrap_or(false))
+}
+
+pub fn is_admin(conn: &mut redis::Connection, username: String) -> redis::RedisResult<bool> {
+    use redis::Commands;
+    conn.exists(format!("users:{}:admin", username))
 }
 
 

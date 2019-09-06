@@ -2,7 +2,7 @@ use serde_derive::{Serialize, Deserialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Token {
-    user_id: String,
+    username: String,
     is_admin: bool
 }
 
@@ -45,15 +45,23 @@ pub fn home<'a>() -> Response<'a> {
 #[post("/login", format = "json", data = "<param>")]
 pub fn login(server: State<state::Server>, param: Json<LoginRequest>) -> LoginResponse {
     use jwt::{Header, encode};
-    //todo fixme
-    if param.0.username != "admin" || param.0.key != "admin" {
-        return Err(json!({ "success": "false", "error": "invalid username or password" }));
+
+    let srv: &state::Server = &server;
+    let mut conn = srv.db_conn.borrow();
+
+    let valid = db::validate(&mut *conn, param.0.username.clone(), param.0.key)
+        .map_err(|_| json!({ "success": false, "error": "internal server error" }))?;
+    if !valid {
+        return Err(json!({ "success": false, "error": "invalid username or password" }));
     }
 
 	let auth = &(*server).settings.auth;
+    let admin = db::is_admin(&mut *conn, param.0.username.clone())
+        .map_err(|_| json!({ "success": false, "error": "internal server error" }))?;
+
     let token = encode(&Header::new(auth.algorithm), &Token {
-        user_id: "admin".to_string(),
-        is_admin: true
+        username: param.0.username,
+        is_admin: admin
     }, auth.secret.as_bytes())
         .map_err(|_| json!({ "success": false, "error": "failed to sign token" }))?;
     Ok(json!({ "success": true, "token": token }))
@@ -149,8 +157,9 @@ impl<'a, 'r> FromRequest<'a, 'r> for Token {
         if keys.len() == 0 {
             return Outcome::Failure((Status::Unauthorized, TokenError::Missing));
         }
-        let auth = request.guard::<State<Auth>>().expect("Unable to obtain state for auth");
-        match decode_token(keys[0], &auth) {
+        let server = request.guard::<State<state::Server>>().expect("Unable to obtain state for auth");
+        let auth = &server.settings.auth;
+        match decode_token(keys[0], auth) {
             None => Outcome::Failure((Status::Unauthorized, TokenError::Invalid)),
             Some(token) => Outcome::Success(token)
         }
