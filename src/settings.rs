@@ -45,6 +45,29 @@ impl Default for Logging {
 	}
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "PascalCase", default)]
+pub struct Auth {
+    pub alg: jwt::Algorithm,
+    pub secret: String
+}
+impl Default for Auth {
+    fn default() -> Auth {
+        use std::iter;
+        use rand::{Rng, thread_rng};
+        use rand::distributions::Alphanumeric;
+
+        let mut rng = thread_rng();
+        Auth {
+            alg: jwt::Algorithm::HS256,
+            secret: iter::repeat(())
+                        .map(|()| rng.sample(Alphanumeric))
+                        .take(32)
+                        .collect()
+        }
+    }
+}
+
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::collections::BTreeMap;
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -58,6 +81,7 @@ pub struct Settings {
 	pub size_limits: BTreeMap<String, u64>,
 	pub logging: Logging,
 	pub filesystem_logger: FilesystemLogger,
+    pub auth: Auth,
 }
 impl Default for Settings {
 	fn default() -> Settings {
@@ -69,7 +93,8 @@ impl Default for Settings {
 			keep_alive:        0,
 			size_limits:       BTreeMap::new(),
 			logging:           Default::default(),
-			filesystem_logger: Default::default() 
+			filesystem_logger: Default::default(),
+            auth:              Default::default()
 		}
 	}
 }

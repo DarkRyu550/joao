@@ -23,32 +23,11 @@ use super::settings::Auth;
 
 use rocket_contrib::json::Json;
 use rocket::{Response, State};
-use rocket::request::{Request, FromRequest, Outcome};
 use rocket::http::{Status, ContentType};
-use crate::state;
-use crate::db;
+use rocket::request::{FromRequest, Outcome, Request};
 
 mod objs;
 use objs::*;
-
-enum ActorError {
-	UnknownUser,
-	InvalidSignature,
-}
-
-struct Actor;
-impl FromRequest for Actor {
-	type Error = ActorError;
-	fn from_request(req: &Request) -> Outcome<Self, Self::Error> {
-		req.guard::<State<state::Server>>()
-			.and_then(|state| {
-				let conn = (*state).db_conn.borrow();
-				match db::validate(&mut *conn) {
-
-				}
-			});
-	}
-}
 
 #[get("/")]
 pub fn home<'a>() -> Response<'a> {

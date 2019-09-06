@@ -1,24 +1,23 @@
 //! Objects related to requests and responses performed by the API.
 use serde_derive::{Serialize, Deserialize};
 use super::{Token, Balance, Transfer};
+use rocket_contrib::json::JsonValue;
 
 /* Login */
 #[derive(Debug, Clone, Deserialize)]
 pub struct LoginRequest {
-    username: String,
-    key: String
+    pub username: String,
+    pub key: String
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub enum LoginError {
-    /// The given username is invalid.
-    MalformedUsername,
     /// Either username or password is wrong.
     WrongCombination,
     /// The current client is blocked from doing requests for the given period.
     Cooldown(std::time::Duration)
 }
-pub type LoginResponse = Result<Token, LoginError>;
+pub type LoginResponse = Result<JsonValue, JsonValue>;
 
 /* Drop */
 #[derive(Debug, Clone, Deserialize)]

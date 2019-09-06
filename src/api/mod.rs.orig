@@ -23,10 +23,15 @@ use super::settings::Auth;
 
 use rocket_contrib::json::Json;
 use rocket::{Response, State};
+<<<<<<< HEAD
 use rocket::request::{Request, FromRequest, Outcome};
 use rocket::http::{Status, ContentType};
 use crate::state;
 use crate::db;
+=======
+use rocket::http::{Status, ContentType};
+use rocket::request::{FromRequest, Outcome, Request};
+>>>>>>> 2a442015ae4b41412cf3d5adb5527de5fcde3f18
 
 mod objs;
 use objs::*;
@@ -78,7 +83,11 @@ pub fn login(auth: State<Auth>, param: Json<LoginRequest>) -> LoginResponse {
 }
 
 #[post("/drop", format = "json", data = "<param>")]
+<<<<<<< HEAD
+pub fn drop(user: User) -> Json<DropResponse> {
+=======
 pub fn drop(token: Token, param: Json<DropRequest>) -> Json<DropResponse> {
+>>>>>>> 2a442015ae4b41412cf3d5adb5527de5fcde3f18
     unimplemented!()
 }
 

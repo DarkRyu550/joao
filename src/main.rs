@@ -8,7 +8,12 @@ extern crate log;
 extern crate rocket;
 
 #[macro_use]
+extern crate rocket_contrib;
+
+#[macro_use]
 extern crate lazy_static;
+
+extern crate jsonwebtoken as jwt;
 
 const PKG_NAME:    &'static str = env!("CARGO_PKG_NAME");
 const PKG_VERSION: &'static str = env!("CARGO_PKG_VERSION");
@@ -79,7 +84,10 @@ fn main() {
 			}),
 			settings: settings
 		}
-	}).mount("/", api::routes()).launch();
+	})
+            .manage(settings.auth)
+            .mount("/", api::routes())
+            .launch();
 
 	/* Shut down filesystem logger. */
 	fslogger.and_then(|(fslog, fslog_thread)|{
