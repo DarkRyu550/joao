@@ -1,17 +1,5 @@
 pub const TRANSACTION_SCRIPT: &'static str = include_str!("transaction.lua");
 
-/*
-struct Database {
-	
-}
-
-struct Client<'a> {
-
-}
-*/
-
-//pub fn connect() -> regis::RedisResult<i>
-
 #[derive(Debug)]
 pub enum TransactionStatus {
     Success,
@@ -36,4 +24,21 @@ pub fn bank_transaction(
         _ => panic!("Invalid status code returned")
     };
     Ok(status)
+}
+
+#[derive(Debug)]
+pub struct LockGuard<'a> {
+	conn: &'a mut redis::Connection,
+}
+
+pub fn create_account(
+	username: String,
+	realname: Option<String>,
+	) -> redis::RedisResult<AccountCreationStatus> {
+
+	let pipe = redis::pipe()
+		.atomic()
+		.cmd("SETNX").arg("new").arg(123)
+		.cmd("SETNX").arg("new").arg(321)
+		.
 }

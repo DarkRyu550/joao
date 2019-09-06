@@ -1,5 +1,11 @@
 ListenAddress   = "0.0.0.0:6969"
 DatabaseAddress = "127.0.0.1:4456"
+DatabaseId      = 0
+Workers         = 16
+KeepAlive       = 0
+
+[SizeLimits]
+json = 4096
 
 [Logging]
 Level = "Trace"
