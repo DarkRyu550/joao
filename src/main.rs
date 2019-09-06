@@ -25,6 +25,7 @@ mod logger;
 mod pool;
 mod settings;
 mod state;
+mod keyhash;
 
 fn main() {
 	let args     = cmdargs::parse();
@@ -85,7 +86,6 @@ fn main() {
 			settings: settings
 		}
 	})
-            .manage(settings.auth)
             .mount("/", api::routes())
             .launch();
 

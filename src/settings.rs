@@ -48,7 +48,7 @@ impl Default for Logging {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase", default)]
 pub struct Auth {
-    pub alg: jwt::Algorithm,
+    pub algorithm: jwt::Algorithm,
     pub secret: String
 }
 impl Default for Auth {
@@ -59,7 +59,7 @@ impl Default for Auth {
 
         let mut rng = thread_rng();
         Auth {
-            alg: jwt::Algorithm::HS256,
+            algorithm: jwt::Algorithm::HS256,
             secret: iter::repeat(())
                         .map(|()| rng.sample(Alphanumeric))
                         .take(32)

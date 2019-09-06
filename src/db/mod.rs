@@ -1,4 +1,36 @@
 pub const TRANSACTION_SCRIPT: &'static str = include_str!("transaction.lua");
+pub const NEW_ACCOUNT_SCRIPT: &'static str = include_str!("new_account.lua");
+pub const DEL_ACCOUNT_SCRIPT: &'static str = include_str!("del_account.lua");
+
+mod name {
+	pub fn user_name(userhash: &str) -> String {
+		format!("{}:name", userhash)
+	}
+
+	pub fn user_email(userhash: &str) -> String {
+		format!("{}:email", userhash)
+	}
+
+	pub fn user_cooler(userhash: &str) -> String {
+		format!("{}:cd_lock", userhash)
+	}
+
+	pub fn user_history(userhash: &str) -> String {
+		format!("{}:history", userhash)
+	}
+
+	pub fn user_keyhash(userhash: &str) -> String {
+		format!("{}:keyhash", userhash)
+	}
+
+	pub fn user_salt(userhash: &str) -> String {
+		format!("{}:salt", userhash)
+	}
+
+	pub fn user_tokens(userhash: &str) -> String {
+		format!("{}:tokens", userhash)
+	}
+}
 
 #[derive(Debug)]
 pub enum TransactionStatus {
@@ -26,19 +58,50 @@ pub fn bank_transaction(
     Ok(status)
 }
 
-#[derive(Debug)]
-pub struct LockGuard<'a> {
-	conn: &'a mut redis::Connection,
-}
-
+use crate::api::Balance;
 pub fn create_account(
-	username: String,
-	realname: Option<String>,
-	) -> redis::RedisResult<AccountCreationStatus> {
+	connection: &mut redis::Connection,
+	userhash:   String,
+	sbalance:   Balance,
+	email:      String,
+	realname:   String,
+	keyhash:    String,
+	salt:       String) -> redis::RedisResult<String> {
 
-	let pipe = redis::pipe()
-		.atomic()
-		.cmd("SETNX").arg("new").arg(123)
-		.cmd("SETNX").arg("new").arg(321)
-		.
+	trace!("Creating a new account on userhash {}", userhash);
+	let script = redis::Script::new(NEW_ACCOUNT_SCRIPT);
+	Ok(script
+		.key(name::user_name(&userhash))
+		.key(name::user_email(&userhash))
+		.key(name::user_keyhash(&userhash))
+		.key(name::user_salt(&userhash))
+		.key(name::user_cooler(&userhash))
+		.key(userhash)
+		.arg(sbalance)
+		.arg(email)
+		.arg(realname)
+		.arg(keyhash)
+		.arg(salt)
+		.invoke(connection)?)
 }
+
+pub fn delete_account(
+	connection: &mut redis::Connection,
+	userhash:   String
+	) -> redis::RedisResult<String> {
+	
+	let script = redis::Script::new(DEL_ACCOUNT_SCRIPT);
+	Ok(script
+		.key(name::user_email(&userhash))
+		.key(name::user_name(&userhash))
+		.key(name::user_history(&userhash))
+		.key(name::user_cooler(&userhash))
+		.key(name::user_keyhash(&userhash))
+		.key(name::user_salt(&userhash))
+		.key(name::user_tokens(&userhash))
+		.key(userhash)
+		.invoke(connection)?)
+
+}
+
+

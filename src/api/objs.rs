@@ -54,10 +54,6 @@ pub type TransferResponse = Result<(), TransferError>;
 
 
 /* History */
-#[derive(Debug, Clone, Deserialize)]
-pub struct HistoryRequest {
-
-}
 #[derive(Debug, Clone, Serialize)]
 pub enum HistoryError {
     /// The given token is not valid.
@@ -78,4 +74,16 @@ pub enum DepositError {
 }
 pub type DepositResponse = Result<(), DepositError>;
 
-
+/* Registration */
+#[derive(Debug, Clone, Deserialize)]
+pub struct RegisterRequest {
+	pub email:  String,
+	pub name:   String,
+	pub key:    String,
+}
+#[derive(Debug, Clone, Serialize)]
+pub enum RegisterError {
+	DatabaseError,
+	UserExists,
+}
+pub type RegisterResponse = Result<(), RegisterError>;

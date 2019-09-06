@@ -61,7 +61,7 @@ impl<T> Pool<T> {
 				Ok(value) =>
 					return PoolGuard {
 						pool: &self,
-						val: value
+						val: Some(value)
 					},
 				Err(_) => {
 					self.sleep.push(std::thread::current());
@@ -76,7 +76,7 @@ impl<T> Pool<T> {
 			.map(|val| 
 				PoolGuard {
 					pool: &self,
-					val:  val
+					val:  Some(val)
 				}
 			).ok()
 	}
@@ -96,18 +96,16 @@ impl<T> Pool<T> {
 
 pub struct PoolGuard<'a, T> {
 	pool: &'a Pool<T>,
-	val:  T
+	val:  Option<T>
 }
 impl<'a, T> Drop for PoolGuard<'a, T> {
 	fn drop(&mut self) {
 		/* Reclaim the object that was given to us so that we may return it */
 		use std::mem;
-		let mut a: T = unsafe {
-			mem::uninitialized()
-		};
+		let mut a = None;
 		mem::swap(&mut a, &mut self.val);
-			
-		self.pool.queue.push(a)
+		
+		self.pool.queue.push(a.unwrap())
 			.expect("Cannot return borrowed value back to pool");
 
 		self.pool.wake_one();
@@ -118,13 +116,13 @@ use core::ops::Deref;
 impl<'a, T> Deref for PoolGuard<'a, T> {
 	type Target = T;
 	fn deref(&self) -> &T {
-		&self.val
+		self.val.as_ref().unwrap()
 	}
 }
 
 use core::ops::DerefMut;
 impl<'a, T> DerefMut for PoolGuard<'a, T> {
 	fn deref_mut(&mut self) -> &mut T {
-		&mut self.val
+		self.val.as_mut().unwrap()
 	}
 }

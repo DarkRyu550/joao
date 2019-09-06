@@ -11,7 +11,6 @@ pub struct Token {
 pub type Balance = u32;
 
 /// Represents a money transfer between two users
-/// /// Represents a money transfer between two users..
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Transfer {
     source:  String,
@@ -27,28 +26,10 @@ use rocket::request::{Request, FromRequest, Outcome};
 use rocket::http::{Status, ContentType};
 use crate::state;
 use crate::db;
+use crate::keyhash;
 
 mod objs;
 use objs::*;
-
-enum ActorError {
-	UnknownUser,
-	InvalidSignature,
-}
-
-struct Actor;
-impl FromRequest for Actor {
-	type Error = ActorError;
-	fn from_request(req: &Request) -> Outcome<Self, Self::Error> {
-		req.guard::<State<state::Server>>()
-			.and_then(|state| {
-				let conn = (*state).db_conn.borrow();
-				match db::validate(&mut *conn) {
-
-				}
-			});
-	}
-}
 
 #[get("/")]
 pub fn home<'a>() -> Response<'a> {
@@ -62,19 +43,58 @@ pub fn home<'a>() -> Response<'a> {
 }
 
 #[post("/login", format = "json", data = "<param>")]
-pub fn login(auth: State<Auth>, param: Json<LoginRequest>) -> LoginResponse {
+pub fn login(server: State<state::Server>, param: Json<LoginRequest>) -> LoginResponse {
     use jwt::{Header, encode};
     //todo fixme
     if param.0.username != "admin" || param.0.key != "admin" {
         return Err(json!({ "success": "false", "error": "invalid username or password" }));
     }
-    let auth: &Auth = &auth;
-    let token = encode(&Header::new(auth.alg), &Token {
+
+	let auth = &(*server).settings.auth;
+    let token = encode(&Header::new(auth.algorithm), &Token {
         user_id: "admin".to_string(),
         is_admin: true
     }, auth.secret.as_bytes())
         .map_err(|_| json!({ "success": false, "error": "failed to sign token" }))?;
     Ok(json!({ "success": true, "token": token }))
+}
+
+#[post("/register", format = "json", data = "<param>")]
+pub fn register(server: State<state::Server>, param: Json<RegisterRequest>)
+	-> Json<RegisterResponse> {
+	
+	let mut conn = (*server).db_conn.borrow();
+	let param    = &(*param);
+
+	let (keyhash, salt) = keyhash::generate(param.key.clone());
+
+	info!("Creating an account for {}", param.email);
+	let status = match db::create_account(
+		&mut *conn,
+		param.email.clone(),
+		0,
+		param.email.clone(),
+		param.name.clone(),
+		keyhash,
+		salt
+		){
+
+		Ok(status) => status,
+		Err(what) => {
+			error!("Error when contacting Redis: {:?}", what);
+			return Json(Err(RegisterError::DatabaseError))
+		}
+	};
+	debug!("Account creation invoke for {} returned {:?}", param.email, status);
+
+	Json(match status.as_str() {
+		"-KeyExists" => Err(RegisterError::UserExists),
+		"+OK" => Ok(()),
+		s @ &_ => {
+			error!("Invalid return from account creation invoke: {}", s);
+			Err(RegisterError::DatabaseError)
+		}
+	})
 }
 
 #[post("/drop", format = "json", data = "<param>")]
@@ -98,7 +118,7 @@ pub fn deposit(token: Token, param: Json<DepositRequest>) -> Json<DepositRespons
 }
 
 pub fn routes() -> Vec<rocket::Route> {
-	routes![home, login, drop, transfer, history, deposit]
+	routes![home, login, drop, register, transfer, history, deposit]
 }
 
 #[derive(Debug)]
@@ -111,7 +131,7 @@ fn decode_token(raw: &str, auth: &Auth) -> Option<Token> {
     use jwt::{Validation, decode};
 
     let validation = Validation {
-        algorithms: vec![auth.alg],
+        algorithms: vec![auth.algorithm],
         validate_exp: false,
         ..Default::default()
     };
