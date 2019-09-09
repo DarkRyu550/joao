@@ -112,14 +112,14 @@ pub fn validate(
 	password: String) -> redis::RedisResult<bool> {
 
     use redis::Commands;
-    let hash: Option<String> = conn.get(name::user_keyhash(&userhash))?;
-	let salt: Option<String> = conn.get(name::user_salt(&userhash))?;
+    let hash: Option<String> = connection.get(name::user_keyhash(&userhash))?;
+	let salt: Option<String> = connection.get(name::user_salt(&userhash))?;
 
 	trace!("Trying to log user with hash {} in", userhash);
 	use crate::keyhash;
 	Ok(match (hash, salt) {
 		(Some(hash), Some(salt)) => 
-			keyhash::verify(pasword, hash, salt).unwrap_or(false),
+			keyhash::verify(password, hash, salt).unwrap_or(false),
 		_ => false
 	})
 }
