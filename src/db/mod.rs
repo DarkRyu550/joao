@@ -31,6 +31,10 @@ mod name {
 	pub fn user_tokens(userhash: &str) -> String {
 		format!("{}:tokens", userhash)
 	}
+
+	pub fn user_admin(userhash: &str) -> String {
+		format!("{}:admin", userhash)
+	}
 }
 
 #[derive(Debug)]
@@ -88,6 +92,7 @@ pub fn delete_account(
 	userhash:   String
 	) -> redis::RedisResult<String> {
 	
+	trace!("Deleting the account on userhash {}", userhash);
 	let script = redis::Script::new(DEL_ACCOUNT_SCRIPT);
 	Ok(script
 		.key(name::user_email(&userhash))
@@ -101,19 +106,27 @@ pub fn delete_account(
 		.invoke(connection)?)
 }
 
-pub fn validate(conn: &mut redis::Connection, username: String,
-                password: String) -> redis::RedisResult<bool> {
-    use redis::Commands;
-    use bcrypt::verify;
+pub fn validate(
+	connection: &mut redis::Connection, 
+	userhash: String,
+	password: String) -> redis::RedisResult<bool> {
 
-    let hash: Option<String> = conn.get(format!("users:{}:password", username))?;
-    
-    Ok(hash.as_ref().and_then(|h| verify(password, h).ok()).unwrap_or(false))
+    use redis::Commands;
+    let hash: Option<String> = conn.get(name::user_keyhash(&userhash))?;
+	let salt: Option<String> = conn.get(name::user_salt(&userhash))?;
+
+	trace!("Trying to log user with hash {} in", userhash);
+	use crate::keyhash;
+	Ok(match (hash, salt) {
+		(Some(hash), Some(salt)) => 
+			keyhash::verify(pasword, hash, salt).unwrap_or(false),
+		_ => false
+	})
 }
 
 pub fn is_admin(conn: &mut redis::Connection, username: String) -> redis::RedisResult<bool> {
     use redis::Commands;
-    conn.exists(format!("users:{}:admin", username))
+    conn.exists(name::user_admin(&username))
 }
 
 
