@@ -17,7 +17,6 @@ pub enum LoginError {
     /// The current client is blocked from doing requests for the given period.
     Cooldown(std::time::Duration)
 }
-pub type LoginResponse = Result<JsonValue, JsonValue>;
 
 /* Drop */
 #[derive(Debug, Clone, Deserialize)]
@@ -81,9 +80,3 @@ pub struct RegisterRequest {
 	pub name:   String,
 	pub key:    String,
 }
-#[derive(Debug, Clone, Serialize)]
-pub enum RegisterError {
-	DatabaseError,
-	UserExists,
-}
-pub type RegisterResponse = Result<(), RegisterError>;

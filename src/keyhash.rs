@@ -1,22 +1,25 @@
 pub fn generate(key: String) -> (String, String) {
 	/* BCrypt only allows for keys with a maximum of 72 bytes. */
 	let pass = key.into_bytes().into_iter().take(72).collect::<Vec<_>>();
-	let salt = (0..16)
+/*	let salt = (0..16)
 		.into_iter()
 		.map(|_| rand::random::<u8>())
 		.collect::<Vec<_>>();
-	
+
 	let mut out = [0_u8; 24];
-	bcrypt::bcrypt(bcrypt::DEFAULT_COST, &pass[..], &salt[..], &mut out);
+	bcrypt::bcrypt(bcrypt::DEFAULT_COST / 2, &salt[..], &pass[..], &mut out);
 
 	let pass = out.iter()
 		.map(|val| format!("{:02x}", val))
 		.collect::<String>();
 	let salt = salt.iter()
 		.map(|val| format!("{:02x}", val))
-		.collect::<String>();
+		.collect::<String>();*/
 	
-	(pass, salt)
+    let pass = bcrypt::hash(pass, bcrypt::DEFAULT_COST / 2)
+        .expect("oh god oh fuck");
+
+	(pass, "".to_owned())
 }
 
 pub enum VerifyError {

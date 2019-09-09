@@ -72,7 +72,7 @@ pub fn create_account(
 
 	trace!("Creating a new account on userhash {}", userhash);
 	let script = redis::Script::new(NEW_ACCOUNT_SCRIPT);
-	Ok(script
+	script
 		.key(name::user_name(&userhash))
 		.key(name::user_email(&userhash))
 		.key(name::user_keyhash(&userhash))
@@ -84,7 +84,7 @@ pub fn create_account(
 		.arg(realname)
 		.arg(keyhash)
 		.arg(salt)
-		.invoke(connection)?)
+		.invoke(connection)
 }
 
 pub fn delete_account(
@@ -94,7 +94,7 @@ pub fn delete_account(
 	
 	trace!("Deleting the account on userhash {}", userhash);
 	let script = redis::Script::new(DEL_ACCOUNT_SCRIPT);
-	Ok(script
+	script
 		.key(name::user_email(&userhash))
 		.key(name::user_name(&userhash))
 		.key(name::user_history(&userhash))
@@ -103,7 +103,7 @@ pub fn delete_account(
 		.key(name::user_salt(&userhash))
 		.key(name::user_tokens(&userhash))
 		.key(userhash)
-		.invoke(connection)?)
+		.invoke(connection)
 }
 
 pub fn validate(
@@ -114,8 +114,7 @@ pub fn validate(
     use redis::Commands;
     let hash: Option<String> = connection.get(name::user_keyhash(&userhash))?;
 	let salt: Option<String> = connection.get(name::user_salt(&userhash))?;
-
-	trace!("Trying to log user with hash {} in", userhash);
+	trace!("Trying to log in user with hash {}", userhash);
 	use crate::keyhash;
 	Ok(match (hash, salt) {
 		(Some(hash), Some(salt)) => 

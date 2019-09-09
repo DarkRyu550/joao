@@ -89,7 +89,7 @@ impl Default for Settings {
 			listen_address:    "0.0.0.0:6969".to_owned(),
 			database_address:  "127.0.0.1:6380".to_owned(),
 			database_id:       0,
-			workers:           16,
+			workers:           4,
 			keep_alive:        0,
 			size_limits:       BTreeMap::new(),
 			logging:           Default::default(),

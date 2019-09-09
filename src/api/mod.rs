@@ -20,8 +20,9 @@ pub struct Transfer {
 
 use super::settings::Auth;
 
-use rocket_contrib::json::Json;
+use rocket_contrib::json::{Json, JsonValue};
 use rocket::{Response, State};
+use rocket::response::{self, Responder, content};
 use rocket::request::{Request, FromRequest, Outcome};
 use rocket::http::{Status, ContentType};
 use crate::state;
@@ -30,6 +31,68 @@ use crate::keyhash;
 
 mod objs;
 use objs::*;
+
+pub enum JsonResponse {
+    Success(JsonValue),
+    Failure(JsonValue)
+}
+
+impl JsonResponse {
+    fn error(msg: &str) -> JsonValue {
+        json!({ "error": msg })
+    }
+
+    fn fail(msg: &str) -> Self {
+        Self::Failure(Self::error(msg))
+    }
+
+    fn empty_success() -> Self {
+        Self::Success(json!({}))
+    }
+}
+
+impl<'r> Responder<'r> for JsonResponse {
+    fn respond_to(self, req: &Request) -> response::Result<'r> {
+        let status = match self {
+            Self::Success(v) => JsonStatus { success: true,  value: v },
+            Self::Failure(v) => JsonStatus { success: false, value: v }
+        };
+        serde_json::to_string(&status).map(|string| {
+            content::Json(string).respond_to(req).unwrap()
+        }).map_err(|e| {
+            error!("JSON failed to serialize: {:?}", e);
+            Status::InternalServerError
+        })
+    }
+}
+
+impl core::ops::Try for JsonResponse {
+    type Ok = JsonValue;
+    type Error = JsonValue;
+
+    fn from_error(v: Self::Error) -> Self {
+        Self::Failure(v)
+    }
+
+    fn from_ok(v: Self::Ok) -> Self {
+        Self::Success(v)
+    }
+
+    fn into_result(self) -> Result<Self::Ok, Self::Error> {
+        match self {
+            Self::Success(v) => Ok(v),
+            Self::Failure(v) => Err(v)
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct JsonStatus {
+    success: bool,
+
+    #[serde(flatten)]
+    value: JsonValue
+}
 
 #[get("/")]
 pub fn home<'a>() -> Response<'a> {
@@ -43,33 +106,33 @@ pub fn home<'a>() -> Response<'a> {
 }
 
 #[post("/login", format = "json", data = "<param>")]
-pub fn login(server: State<state::Server>, param: Json<LoginRequest>) -> LoginResponse {
+pub fn login(server: State<state::Server>, param: Json<LoginRequest>) -> JsonResponse {
     use jwt::{Header, encode};
 
     let srv: &state::Server = &server;
     let mut conn = srv.db_conn.borrow();
 
     let valid = db::validate(&mut *conn, param.0.username.clone(), param.0.key)
-        .map_err(|_| json!({ "success": false, "error": "internal server error" }))?;
+        .map_err(|_| JsonResponse::error("internal server error"))?;
     if !valid {
-        return Err(json!({ "success": false, "error": "invalid username or password" }));
+        return JsonResponse::fail("invalid username or password");
     }
 
 	let auth = &(*server).settings.auth;
     let admin = db::is_admin(&mut *conn, param.0.username.clone())
-        .map_err(|_| json!({ "success": false, "error": "internal server error" }))?;
+        .map_err(|_| JsonResponse::error("internal server error"))?;
 
     let token = encode(&Header::new(auth.algorithm), &Token {
         username: param.0.username,
         is_admin: admin
     }, auth.secret.as_bytes())
-        .map_err(|_| json!({ "success": false, "error": "failed to sign token" }))?;
-    Ok(json!({ "success": true, "token": token }))
+        .map_err(|_| JsonResponse::error("failed to sign token"))?;
+    JsonResponse::Success(json!({ "token": token }))
 }
 
 #[post("/register", format = "json", data = "<param>")]
 pub fn register(server: State<state::Server>, param: Json<RegisterRequest>)
-	-> Json<RegisterResponse> {
+	-> JsonResponse {
 	
 	let mut conn = (*server).db_conn.borrow();
 	let param    = &(*param);
@@ -90,19 +153,19 @@ pub fn register(server: State<state::Server>, param: Json<RegisterRequest>)
 		Ok(status) => status,
 		Err(what) => {
 			error!("Error when contacting Redis: {:?}", what);
-			return Json(Err(RegisterError::DatabaseError))
+			return JsonResponse::fail("database error");
 		}
 	};
 	debug!("Account creation invoke for {} returned {:?}", param.email, status);
 
-	Json(match status.as_str() {
-		"-KeyExists" => Err(RegisterError::UserExists),
-		"+OK" => Ok(()),
+	match status.as_str() {
+		"-KeyExists" => JsonResponse::fail("user already exists"),
+		"+OK" => JsonResponse::empty_success(),
 		s @ &_ => {
 			error!("Invalid return from account creation invoke: {}", s);
-			Err(RegisterError::DatabaseError)
+			JsonResponse::fail("database error")
 		}
-	})
+	}
 }
 
 #[post("/drop", format = "json", data = "<param>")]

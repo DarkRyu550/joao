@@ -1,5 +1,6 @@
 #![feature(proc_macro_hygiene)]
 #![feature(decl_macro)]
+#![feature(try_trait)]
 
 #[macro_use]
 extern crate log;
