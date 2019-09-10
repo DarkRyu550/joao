@@ -16,7 +16,7 @@ mod names {
 	}
 
 	pub fn user_balance(userhash: &str) -> String {
-		format!("user:{}:balance")
+		format!("user:{}:balance", userhash)
 	}
 
 	pub fn user_email(userhash: &str) -> String {
@@ -71,8 +71,8 @@ pub enum TransactionStatus {
 pub fn bank_transaction(conn: &mut redis::Connection, from: &str, to: &str, 
 						amount: u32) -> redis::RedisResult<TransactionStatus> {
 
-	let from = get_userhash(&from)?;
-	let to = get_userhash(&to)?;
+	let from = get_userhash(conn, &from)?;
+	let to = get_userhash(conn, &to)?;
 
 	let script = redis::Script::new(TRANSACTION_SCRIPT);
 	let code: u32 = script
@@ -104,13 +104,13 @@ pub fn create_account(
 	for _ in (0..MAX_RETRIES) {
 		let userhash = (0..USERHASH_SIZE)
 			.into_iter()
-			.map(|_| random::random::<u8>())
+			.map(|_| rand::random::<u8>())
 			.map(|n| format!("{:x}", n))
 			.collect::<String>();
 
 		info!("Creating an account for {} on hash {}", username, userhash);
 		
-		let result = script
+		let result: String = script
 			.key(names::user_name(&userhash))
 			.key(names::user_email(&userhash))
 			.key(names::user_keyhash(&userhash))
@@ -119,12 +119,12 @@ pub fn create_account(
 			.key(names::user_balance(&userhash))
 			.key(names::uid_table())
 			.arg(sbalance)
-			.arg(email)
-			.arg(realname)
-			.arg(keyhash)
-			.arg(salt)
-			.arg(username)
-			.arg(userhash)
+			.arg(&email)
+			.arg(&realname)
+			.arg(&keyhash)
+			.arg(&salt)
+			.arg(&username)
+			.arg(&userhash)
 			.invoke(connection)?;
 
 		if result.as_str() != "-Retry" {
@@ -133,6 +133,7 @@ pub fn create_account(
 			info!("Retrying account creation for user {}", username);
 		}
 	}
+    Ok("-UnableToCreate".to_owned())
 }
 
 pub fn delete_account(
@@ -140,7 +141,7 @@ pub fn delete_account(
 	username:   String
 	) -> redis::RedisResult<String> {
 	
-	let userhash = get_userhash(&username)?;
+	let userhash = get_userhash(connection, &username)?;
 	trace!("Deleting the account on userhash {}", userhash);
 
 	let script = redis::Script::new(DEL_ACCOUNT_SCRIPT);
@@ -163,7 +164,7 @@ pub fn validate(
 	username: String,
 	password: String) -> redis::RedisResult<bool> {
 	
-	let userhash = get_userhash(&username)?;
+	let userhash = get_userhash(connection, &username)?;
 
     use redis::Commands;
     let hash: Option<String> = connection.get(names::user_keyhash(&userhash))?;
@@ -178,7 +179,7 @@ pub fn validate(
 }
 
 pub fn is_admin(conn: &mut redis::Connection, username: String) -> redis::RedisResult<bool> {
- 	let userhash = get_userhash(&username)?;
+ 	let userhash = get_userhash(conn, &username)?;
 
  	use redis::Commands;
     conn.exists(names::user_admin(&userhash))
