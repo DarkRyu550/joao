@@ -1,19 +1,25 @@
 -- del_account.lua: Deletes a new user at a key.
 -- Parameters:
---      KEYS[1] - KEYS[8]:email
---      KEYS[2] - KEYS[8]:name
---      KEYS[3] - KEYS[8]:history
---      KEYS[4] - KEYS[8]:cd_lock
---      KEYS[5] - KEYS[8]:keyhash
---      KEYS[6] - KEYS[8]:salt
---      KEYS[7] - KEYS[8]:tokens
---      KEYS[8] - Target key family where the account is stored.
+--      KEYS[1]  - user:email
+--      KEYS[2]  - user:name
+--      KEYS[3]  - user:history
+--      KEYS[4]  - user:cd_lock
+--      KEYS[5]  - user:keyhash
+--      KEYS[6]  - user:salt
+--      KEYS[7]  - user:tokens
+--      KEYS[8]  - user:balance
+--      KEYS[9]  - user:username
+--      KEYS[10] - uid_table
 --
 
 if not redis.call("get", KEYS[8]) then
 	return "-KeyDoesNotExist"
 end
 
+local username = redis.call("get", KEYS[9])
+redis.call("hdel", KEYS[10], username)
+
+redis.call("del", KEYS[9])
 redis.call("del", KEYS[8])
 redis.call("del", KEYS[1])
 redis.call("del", KEYS[2])

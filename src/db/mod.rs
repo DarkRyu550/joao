@@ -1,55 +1,85 @@
 pub const TRANSACTION_SCRIPT: &'static str = include_str!("transaction.lua");
 pub const NEW_ACCOUNT_SCRIPT: &'static str = include_str!("new_account.lua");
 pub const DEL_ACCOUNT_SCRIPT: &'static str = include_str!("del_account.lua");
-pub const INITIAL_BALANCE: u32             = 500;
 
-mod name {
+pub const INITIAL_BALANCE: u32   = 500;
+pub const MAX_RETRIES:     usize = 256;
+pub const USERHASH_SIZE:   usize = 32;
+
+mod names {
+	pub fn uid_table() -> String {
+		"uids".to_owned()
+	}
+
 	pub fn user_name(userhash: &str) -> String {
-		format!("{}:name", userhash)
+		format!("user:{}:name", userhash)
+	}
+
+	pub fn user_balance(userhash: &str) -> String {
+		format!("user:{}:balance")
 	}
 
 	pub fn user_email(userhash: &str) -> String {
-		format!("{}:email", userhash)
+		format!("user:{}:email", userhash)
 	}
 
 	pub fn user_cooler(userhash: &str) -> String {
-		format!("{}:cd_lock", userhash)
+		format!("user:{}:cd_lock", userhash)
 	}
 
 	pub fn user_history(userhash: &str) -> String {
-		format!("{}:history", userhash)
+		format!("user:{}:history", userhash)
 	}
 
 	pub fn user_keyhash(userhash: &str) -> String {
-		format!("{}:keyhash", userhash)
+		format!("user:{}:keyhash", userhash)
 	}
 
 	pub fn user_salt(userhash: &str) -> String {
-		format!("{}:salt", userhash)
+		format!("user:{}:salt", userhash)
 	}
 
 	pub fn user_tokens(userhash: &str) -> String {
-		format!("{}:tokens", userhash)
+		format!("user:{}:tokens", userhash)
+	}
+
+	pub fn user_username(userhash: &str) -> String {
+		format!("user:{}:username", userhash)
 	}
 
 	pub fn user_admin(userhash: &str) -> String {
-		format!("{}:admin", userhash)
+		format!("user:{}:admin", userhash)
 	}
+}
+
+pub fn get_userhash(
+	connection: &mut redis::Connection,
+	username: &str) -> redis::RedisResult<String> {
+
+	use redis::Commands;
+	connection.hget(names::uid_table(), username)
 }
 
 #[derive(Debug)]
 pub enum TransactionStatus {
-    Success,
-    NotEnoughFunds,
-    InvalidFrom,
-    InvalidTo
+	Success,
+	NotEnoughFunds,
+	InvalidFrom,
+	InvalidTo
 }
 
 pub fn bank_transaction(conn: &mut redis::Connection, from: &str, to: &str, 
-                        amount: u32) -> redis::RedisResult<TransactionStatus> {
+						amount: u32) -> redis::RedisResult<TransactionStatus> {
 
-    let script = redis::Script::new(TRANSACTION_SCRIPT);
-    let code: u32 = script.key(from).key(to).arg(amount).invoke(conn)?;
+	let from = get_userhash(&from)?;
+	let to = get_userhash(&to)?;
+
+	let script = redis::Script::new(TRANSACTION_SCRIPT);
+	let code: u32 = script
+		.key(names::user_balance(&from))
+		.key(names::user_balance(&to))
+		.arg(amount)
+		.invoke(conn)?;
     let status = match code {
         0 => TransactionStatus::Success,
         1 => TransactionStatus::NotEnoughFunds,
@@ -63,57 +93,81 @@ pub fn bank_transaction(conn: &mut redis::Connection, from: &str, to: &str,
 use crate::api::Balance;
 pub fn create_account(
 	connection: &mut redis::Connection,
-	userhash:   String,
+	username:   String,
 	sbalance:   Balance,
 	email:      String,
 	realname:   String,
 	keyhash:    String,
 	salt:       String) -> redis::RedisResult<String> {
 
-	trace!("Creating a new account on userhash {}", userhash);
 	let script = redis::Script::new(NEW_ACCOUNT_SCRIPT);
-	script
-		.key(name::user_name(&userhash))
-		.key(name::user_email(&userhash))
-		.key(name::user_keyhash(&userhash))
-		.key(name::user_salt(&userhash))
-		.key(name::user_cooler(&userhash))
-		.key(userhash)
-		.arg(sbalance)
-		.arg(email)
-		.arg(realname)
-		.arg(keyhash)
-		.arg(salt)
-		.invoke(connection)
+	for _ in (0..MAX_RETRIES) {
+		let userhash = (0..USERHASH_SIZE)
+			.into_iter()
+			.map(|_| random::random::<u8>())
+			.map(|n| format!("{:x}", n))
+			.collect::<String>();
+
+		info!("Creating an account for {} on hash {}", username, userhash);
+		
+		let result = script
+			.key(names::user_name(&userhash))
+			.key(names::user_email(&userhash))
+			.key(names::user_keyhash(&userhash))
+			.key(names::user_salt(&userhash))
+			.key(names::user_cooler(&userhash))
+			.key(names::user_balance(&userhash))
+			.key(names::uid_table())
+			.arg(sbalance)
+			.arg(email)
+			.arg(realname)
+			.arg(keyhash)
+			.arg(salt)
+			.arg(username)
+			.arg(userhash)
+			.invoke(connection)?;
+
+		if result.as_str() != "-Retry" {
+			return Ok(result)
+		} else {
+			info!("Retrying account creation for user {}", username);
+		}
+	}
 }
 
 pub fn delete_account(
 	connection: &mut redis::Connection,
-	userhash:   String
+	username:   String
 	) -> redis::RedisResult<String> {
 	
+	let userhash = get_userhash(&username)?;
 	trace!("Deleting the account on userhash {}", userhash);
+
 	let script = redis::Script::new(DEL_ACCOUNT_SCRIPT);
 	script
-		.key(name::user_email(&userhash))
-		.key(name::user_name(&userhash))
-		.key(name::user_history(&userhash))
-		.key(name::user_cooler(&userhash))
-		.key(name::user_keyhash(&userhash))
-		.key(name::user_salt(&userhash))
-		.key(name::user_tokens(&userhash))
-		.key(userhash)
+		.key(names::user_email(&userhash))
+		.key(names::user_name(&userhash))
+		.key(names::user_history(&userhash))
+		.key(names::user_cooler(&userhash))
+		.key(names::user_keyhash(&userhash))
+		.key(names::user_salt(&userhash))
+		.key(names::user_tokens(&userhash))
+		.key(names::user_balance(&userhash))
+		.key(names::user_username(&userhash))
+		.key(names::uid_table())
 		.invoke(connection)
 }
 
 pub fn validate(
 	connection: &mut redis::Connection, 
-	userhash: String,
+	username: String,
 	password: String) -> redis::RedisResult<bool> {
+	
+	let userhash = get_userhash(&username)?;
 
     use redis::Commands;
-    let hash: Option<String> = connection.get(name::user_keyhash(&userhash))?;
-	let salt: Option<String> = connection.get(name::user_salt(&userhash))?;
+    let hash: Option<String> = connection.get(names::user_keyhash(&userhash))?;
+	let salt: Option<String> = connection.get(names::user_salt(&userhash))?;
 	trace!("Trying to log in user with hash {}", userhash);
 	use crate::keyhash;
 	Ok(match (hash, salt) {
@@ -124,8 +178,10 @@ pub fn validate(
 }
 
 pub fn is_admin(conn: &mut redis::Connection, username: String) -> redis::RedisResult<bool> {
-    use redis::Commands;
-    conn.exists(name::user_admin(&username))
+ 	let userhash = get_userhash(&username)?;
+
+ 	use redis::Commands;
+    conn.exists(names::user_admin(&userhash))
 }
 
 
