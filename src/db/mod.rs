@@ -207,7 +207,10 @@ pub fn validate(
 
     trace!("Validating credentials for user {}", username);
 	
-	let userhash = get_userhash(connection, &username)?;
+	let userhash = match get_userhash(connection, &username) {
+        Err(e) => return false,
+        Ok(s)  => s
+    };
 
     use redis::Commands;
     let hash: Option<String> = connection.get(names::user_keyhash(&userhash))?;
