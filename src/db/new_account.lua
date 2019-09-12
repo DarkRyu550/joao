@@ -18,15 +18,15 @@
 --      ARGV[7] - Userhash.
 --
 
-if redis.call("hexists", KEYS[7], ARGV[6]) then
+if redis.call("hexists", KEYS[7], ARGV[6]) == 1 then
 	return "-KeyExists"
 end
 
-if    redis.call("exists", KEYS[6]) 
-   or redis.call("exists", KEYS[4])
-   or redis.call("exists", KEYS[3])
-   or redis.call("exists", KEYS[2])
-   or redis.call("exists", KEYS[1]) then
+if    redis.call("exists", KEYS[6]) == 1 
+   or redis.call("exists", KEYS[4]) == 1
+   or redis.call("exists", KEYS[3]) == 1
+   or redis.call("exists", KEYS[2]) == 1
+   or redis.call("exists", KEYS[1]) == 1 then
 
 	return "-Retry"
 end

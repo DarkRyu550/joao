@@ -118,6 +118,7 @@ pub fn create_account(
 			.key(names::user_cooler(&userhash))
 			.key(names::user_balance(&userhash))
 			.key(names::uid_table())
+            .key(names::user_username(&userhash))
 			.arg(sbalance)
 			.arg(&email)
 			.arg(&realname)
@@ -163,6 +164,8 @@ pub fn validate(
 	connection: &mut redis::Connection, 
 	username: String,
 	password: String) -> redis::RedisResult<bool> {
+
+    trace!("Validating credentials for user {}", username);
 	
 	let userhash = get_userhash(connection, &username)?;
 

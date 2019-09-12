@@ -76,7 +76,7 @@ pub type DepositResponse = Result<(), DepositError>;
 /* Registration */
 #[derive(Debug, Clone, Deserialize)]
 pub struct RegisterRequest {
-	pub email:  String,
+	pub username:  String,
 	pub name:   String,
 	pub key:    String,
 }

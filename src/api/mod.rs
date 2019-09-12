@@ -113,14 +113,20 @@ pub fn login(server: State<state::Server>, param: Json<LoginRequest>) -> JsonRes
     let mut conn = srv.db_conn.borrow();
 
     let valid = db::validate(&mut *conn, param.0.username.clone(), param.0.key)
-        .map_err(|_| JsonResponse::error("internal server error"))?;
+        .map_err(|e| {
+            error!("Error validating login credentials: {}", e);
+            JsonResponse::error("internal server error")
+        })?;
     if !valid {
         return JsonResponse::fail("invalid username or password");
     }
 
 	let auth = &(*server).settings.auth;
     let admin = db::is_admin(&mut *conn, param.0.username.clone())
-        .map_err(|_| JsonResponse::error("internal server error"))?;
+        .map_err(|e| {
+            error!("Error verifying admin status: {}", e);
+            JsonResponse::error("internal server error")
+        })?;
 
     let token = encode(&Header::new(auth.algorithm), &Token {
         username: param.0.username,
@@ -139,12 +145,12 @@ pub fn register(server: State<state::Server>, param: Json<RegisterRequest>)
 
 	let (keyhash, salt) = keyhash::generate(param.key.clone());
 
-	info!("Creating an account for {}", param.email);
+	info!("Creating an account for {}", param.username);
 	let status = match db::create_account(
 		&mut *conn,
-		param.email.clone(),
+		param.username.clone(),
 		0,
-		param.email.clone(),
+		param.username.clone(),
 		param.name.clone(),
 		keyhash,
 		salt
@@ -156,11 +162,21 @@ pub fn register(server: State<state::Server>, param: Json<RegisterRequest>)
 			return JsonResponse::fail("database error");
 		}
 	};
-	debug!("Account creation invoke for {} returned {:?}", param.email, status);
+	debug!("Account creation invoke for {} returned {:?}", param.username, status);
 
 	match status.as_str() {
 		"-KeyExists" => JsonResponse::fail("user already exists"),
-		"+OK" => JsonResponse::empty_success(),
+		"+OK" => {
+            use jwt::{Header, encode};
+
+            let auth = &(*server).settings.auth;
+            let token = encode(&Header::new(auth.algorithm), &Token {
+                username: param.username.clone(),
+                is_admin: false
+            }, auth.secret.as_bytes())
+                 .map_err(|_| JsonResponse::error("failed to sign token"))?;
+            JsonResponse::Success(json!({ "token": token }))
+        },
 		s @ &_ => {
 			error!("Invalid return from account creation invoke: {}", s);
 			JsonResponse::fail("database error")
