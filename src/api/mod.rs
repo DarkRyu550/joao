@@ -114,9 +114,10 @@ pub fn info(server: State<state::Server>, token: Token) -> JsonResponse {
             return JsonResponse::error("internal server error");
         })?;
     JsonResponse::Success(json!({
+        "realname": info.realname,
         "username": info.username,
         "balance": info.balance,
-        "admin": info.admin
+        "is_admin": info.is_admin
     }))
 }
 

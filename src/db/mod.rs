@@ -66,7 +66,7 @@ pub struct UserInfo {
     pub realname: String,
     pub username: String,
     pub balance: u32,
-    pub admin: bool
+    pub is_admin: bool
 }
 
 pub fn user_info(conn: &mut redis::Connection, username: &str)
@@ -81,7 +81,7 @@ pub fn user_info(conn: &mut redis::Connection, username: &str)
         realname: conn.get(names::user_name(&userhash))?,
         username: username.to_owned(),
         balance: conn.get(names::user_balance(&userhash))?,
-        admin: is_admin(conn, username.to_owned())?
+        is_admin: is_admin(conn, username.to_owned())?
     })
 }
 
