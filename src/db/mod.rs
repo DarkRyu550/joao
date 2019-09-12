@@ -208,7 +208,7 @@ pub fn validate(
     trace!("Validating credentials for user {}", username);
 	
 	let userhash = match get_userhash(connection, &username) {
-        Err(e) => return false,
+        Err(e) => return Ok(false),
         Ok(s)  => s
     };
 
