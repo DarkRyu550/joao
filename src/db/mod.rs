@@ -1,6 +1,7 @@
 pub const TRANSACTION_SCRIPT: &'static str = include_str!("transaction.lua");
 pub const NEW_ACCOUNT_SCRIPT: &'static str = include_str!("new_account.lua");
 pub const DEL_ACCOUNT_SCRIPT: &'static str = include_str!("del_account.lua");
+pub const WITHDRAW_SCRIPT:    &'static str = include_str!("withdraw.lua");
 
 pub const INITIAL_BALANCE: u32   = 500;
 pub const MAX_RETRIES:     usize = 256;
@@ -62,6 +63,7 @@ pub fn get_userhash(
 
 #[derive(Debug)]
 pub struct UserInfo {
+    pub realname: String,
     pub username: String,
     pub balance: u32,
     pub admin: bool
@@ -76,6 +78,7 @@ pub fn user_info(conn: &mut redis::Connection, username: &str)
     use redis::Commands;
 
     Ok(UserInfo {
+        realname: conn.get(names::user_name(&userhash))?,
         username: username.to_owned(),
         balance: conn.get(names::user_balance(&userhash))?,
         admin: is_admin(conn, username.to_owned())?
@@ -208,7 +211,7 @@ pub fn validate(
     trace!("Validating credentials for user {}", username);
 	
 	let userhash = match get_userhash(connection, &username) {
-        Err(e) => return Ok(false),
+        Err(_) => return Ok(false),
         Ok(s)  => s
     };
 
@@ -237,4 +240,19 @@ pub fn deposit(conn: &mut redis::Connection, username: String, amount: u32)
 
     use redis::Commands;
     conn.incr(names::user_balance(&userhash), amount)
+}
+
+pub fn withdraw(conn: &mut redis::Connection, username: String, amount: u32)
+    -> redis::RedisResult<bool> {
+    let userhash = get_userhash(conn, &username)?;
+
+    let res: u32 = redis::Script::new(WITHDRAW_SCRIPT)
+        .key(names::user_balance(&userhash))
+        .arg(amount)
+        .invoke(conn)?;
+    Ok(match res {
+        0 => true,
+        1 => false,
+        _ => panic!("Invalid status code returned")
+    })
 }

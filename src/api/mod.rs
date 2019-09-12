@@ -255,11 +255,26 @@ pub fn history(server: State<state::Server>, token: Token) -> JsonResponse {
     }))
 }
 
-#[post("/reg/deposit", format = "json", data = "<param>")]
+#[post("/withdraw", format = "json", data = "<param>")]
+pub fn withdraw(server: State<state::Server>, token: Token,
+                param: Json<WithdrawRequest>) -> JsonResponse {
+    let mut conn = (*server).db_conn.borrow();
+    let success = db::withdraw(&mut conn, token.username, param.0.amount)
+        .map_err(|e| {
+            eprintln!("Error withdrawing: {}", e);
+            return JsonResponse::error("internal server error");
+        })?;
+    if !success {
+        return JsonResponse::fail("you don't have enough funds");
+    }
+    JsonResponse::empty_success()
+}
+
+#[post("/admin/deposit", format = "json", data = "<param>")]
 pub fn deposit(server: State<state::Server>, token: Token, param: Json<DepositRequest>)
     -> JsonResponse {
     if !token.is_admin {
-        return JsonResponse::fail("You are not an admin");
+        return JsonResponse::fail("you are not an admin");
     }
     let mut conn = (*server).db_conn.borrow();
     db::deposit(&mut conn, param.0.username, param.0.amount)
@@ -270,8 +285,26 @@ pub fn deposit(server: State<state::Server>, token: Token, param: Json<DepositRe
     JsonResponse::empty_success()
 }
 
+#[post("/admin/withdraw", format = "json", data = "<param>")]
+pub fn admin_withdraw(server: State<state::Server>, token: Token,
+                      param: Json<AdminWithdrawRequest>) -> JsonResponse {
+    if !token.is_admin {
+        return JsonResponse::fail("you are not an admin");
+    }
+    let mut conn = (*server).db_conn.borrow();
+    let success = db::withdraw(&mut conn, param.0.username, param.0.amount)
+        .map_err(|e| {
+            eprintln!("Error withdrawing money: {}", e);
+            return JsonResponse::error("internal server error");
+        })?;
+    if !success {
+        return JsonResponse::fail("not enough funds");
+    }
+    JsonResponse::empty_success()
+}
+
 pub fn routes() -> Vec<rocket::Route> {
-	routes![home, info, login, drop, register, transfer, history, deposit]
+	routes![home, info, login, drop, register, transfer, withdraw, history, deposit, admin_withdraw]
 }
 
 #[derive(Debug)]

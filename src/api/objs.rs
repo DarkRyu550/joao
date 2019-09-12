@@ -24,6 +24,11 @@ pub struct TransferRequest {
     pub amount: u32
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct WithdrawRequest {
+    pub amount: u32
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct HistoryEntry {
     pub from: String,
@@ -34,6 +39,12 @@ pub struct HistoryEntry {
 /* Deposit */
 #[derive(Debug, Clone, Deserialize)]
 pub struct DepositRequest {
+    pub username: String,
+    pub amount: u32
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AdminWithdrawRequest {
     pub username: String,
     pub amount: u32
 }
