@@ -105,20 +105,20 @@ pub fn transaction(conn: &mut redis::Connection, from: &str, to: &str,
           		   amount: u32) -> redis::RedisResult<TransactionStatus> {
     trace!("Attempting to transfer {} from {} to {}", amount, from, to);
 
-	let from = get_userhash(conn, &from)?;
-	let to = get_userhash(conn, &to)?;
+	let fromhash = get_userhash(conn, &from)?;
+	let tohash = get_userhash(conn, &to)?;
 
 	let script = redis::Script::new(TRANSACTION_SCRIPT);
 	let code: u32 = script
-		.key(names::user_balance(&from))
-        .key(names::user_history(&from))
-        .key(names::user_cooldown(&from))
-		.key(names::user_balance(&to))
-        .key(names::user_history(&to))
-        .key(names::user_cooldown(&to))
+		.key(names::user_balance(&fromhash))
+        .key(names::user_history(&fromhash))
+        .key(names::user_cooldown(&fromhash))
+		.key(names::user_balance(&tohash))
+        .key(names::user_history(&tohash))
+        .key(names::user_cooldown(&tohash))
 		.arg(amount)
-        .arg(&from)
-        .arg(&to)
+        .arg(from)
+        .arg(to)
 		.invoke(conn)?;
     let status = match code {
         0 => TransactionStatus::Success,

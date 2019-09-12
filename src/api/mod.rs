@@ -208,6 +208,10 @@ pub fn transfer(server: State<state::Server>, token: Token,
                 param: Json<TransferRequest>) -> JsonResponse {
     let mut conn = (*server).db_conn.borrow();
 
+    if token.username == param.0.to {
+        return JsonResponse::fail("you cannot make transfers to yourself");
+    }
+
     let r = db::transaction(&mut conn, &token.username, &param.0.to, param.0.amount)
         .map_err(|e| {
             eprintln!("Transaction error: {}", e);
