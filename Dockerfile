@@ -7,7 +7,7 @@ COPY Cargo.toml Cargo.lock /milo-build/milo/
 
 # Build it - this enables docker to cache built dependencies
 WORKDIR /milo-build/milo
-RUN cargo build --release
+RUN cargo build
 
 # Overwrite with our source and do the final build
 RUN rm -rf target/release/joao \
@@ -16,7 +16,7 @@ RUN rm -rf target/release/joao \
            target/release/incremental/joao-* \
            target/release/joao.d
 COPY src src
-RUN cargo build --release
+RUN cargo build
 
 FROM debian:stretch-slim
 
