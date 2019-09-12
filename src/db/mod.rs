@@ -23,7 +23,7 @@ mod names {
 		format!("user:{}:email", userhash)
 	}
 
-	pub fn user_cooler(userhash: &str) -> String {
+	pub fn user_cooldown(userhash: &str) -> String {
 		format!("user:{}:cd_lock", userhash)
 	}
 
@@ -61,15 +61,49 @@ pub fn get_userhash(
 }
 
 #[derive(Debug)]
+pub struct UserInfo {
+    pub username: String,
+    pub balance: u32,
+    pub admin: bool
+}
+
+pub fn user_info(conn: &mut redis::Connection, username: &str)
+    -> redis::RedisResult<UserInfo> {
+    trace!("Attempting to get user info for {}", username);
+
+    let userhash = get_userhash(conn, &username)?;
+    
+    use redis::Commands;
+
+    Ok(UserInfo {
+        username: username.to_owned(),
+        balance: conn.get(names::user_balance(&userhash))?,
+        admin: is_admin(conn, username.to_owned())?
+    })
+}
+
+pub fn history(conn: &mut redis::Connection, username: &str)
+    -> redis::RedisResult<Vec<String>> {
+    trace!("Attempting to get history for user {}", username);
+
+    let userhash = get_userhash(conn, &username)?;
+    use redis::Commands;
+
+    conn.lrange(names::user_history(&userhash), -20, -1)
+}
+
+#[derive(Debug)]
 pub enum TransactionStatus {
 	Success,
 	NotEnoughFunds,
 	InvalidFrom,
-	InvalidTo
+	InvalidTo,
+    Cooldown
 }
 
-pub fn bank_transaction(conn: &mut redis::Connection, from: &str, to: &str, 
-						amount: u32) -> redis::RedisResult<TransactionStatus> {
+pub fn transaction(conn: &mut redis::Connection, from: &str, to: &str, 
+          		   amount: u32) -> redis::RedisResult<TransactionStatus> {
+    trace!("Attempting to transfer {} from {} to {}", amount, from, to);
 
 	let from = get_userhash(conn, &from)?;
 	let to = get_userhash(conn, &to)?;
@@ -77,14 +111,21 @@ pub fn bank_transaction(conn: &mut redis::Connection, from: &str, to: &str,
 	let script = redis::Script::new(TRANSACTION_SCRIPT);
 	let code: u32 = script
 		.key(names::user_balance(&from))
+        .key(names::user_history(&from))
+        .key(names::user_cooldown(&from))
 		.key(names::user_balance(&to))
+        .key(names::user_history(&to))
+        .key(names::user_cooldown(&to))
 		.arg(amount)
+        .arg(&from)
+        .arg(&to)
 		.invoke(conn)?;
     let status = match code {
         0 => TransactionStatus::Success,
         1 => TransactionStatus::NotEnoughFunds,
         2 => TransactionStatus::InvalidFrom,
         3 => TransactionStatus::InvalidTo,
+        4 => TransactionStatus::Cooldown,
         _ => panic!("Invalid status code returned")
     };
     Ok(status)
@@ -94,7 +135,6 @@ use crate::api::Balance;
 pub fn create_account(
 	connection: &mut redis::Connection,
 	username:   String,
-	sbalance:   Balance,
 	email:      String,
 	realname:   String,
 	keyhash:    String,
@@ -115,11 +155,11 @@ pub fn create_account(
 			.key(names::user_email(&userhash))
 			.key(names::user_keyhash(&userhash))
 			.key(names::user_salt(&userhash))
-			.key(names::user_cooler(&userhash))
+			.key(names::user_cooldown(&userhash))
 			.key(names::user_balance(&userhash))
 			.key(names::uid_table())
             .key(names::user_username(&userhash))
-			.arg(sbalance)
+			.arg(INITIAL_BALANCE)
 			.arg(&email)
 			.arg(&realname)
 			.arg(&keyhash)
@@ -150,7 +190,7 @@ pub fn delete_account(
 		.key(names::user_email(&userhash))
 		.key(names::user_name(&userhash))
 		.key(names::user_history(&userhash))
-		.key(names::user_cooler(&userhash))
+		.key(names::user_cooldown(&userhash))
 		.key(names::user_keyhash(&userhash))
 		.key(names::user_salt(&userhash))
 		.key(names::user_tokens(&userhash))
@@ -188,4 +228,10 @@ pub fn is_admin(conn: &mut redis::Connection, username: String) -> redis::RedisR
     conn.exists(names::user_admin(&userhash))
 }
 
+pub fn deposit(conn: &mut redis::Connection, username: String, amount: u32)
+    -> redis::RedisResult<()> {
+    let userhash = get_userhash(conn, &username)?;
 
+    use redis::Commands;
+    conn.incr(names::user_balance(&userhash), amount)
+}

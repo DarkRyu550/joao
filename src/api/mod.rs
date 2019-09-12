@@ -105,6 +105,21 @@ pub fn home<'a>() -> Response<'a> {
 		.finalize()
 }
 
+#[get("/info")]
+pub fn info(server: State<state::Server>, token: Token) -> JsonResponse {
+    let mut conn = (*server).db_conn.borrow();
+    let info = db::user_info(&mut conn, &token.username)
+        .map_err(|e| {
+            eprintln!("Error getting user info for {}: {}", &token.username, e);
+            return JsonResponse::error("internal server error");
+        })?;
+    JsonResponse::Success(json!({
+        "username": info.username,
+        "balance": info.balance,
+        "admin": info.admin
+    }))
+}
+
 #[post("/login", format = "json", data = "<param>")]
 pub fn login(server: State<state::Server>, param: Json<LoginRequest>) -> JsonResponse {
     use jwt::{Header, encode};
@@ -149,7 +164,6 @@ pub fn register(server: State<state::Server>, param: Json<RegisterRequest>)
 	let status = match db::create_account(
 		&mut *conn,
 		param.username.clone(),
-		0,
 		param.username.clone(),
 		param.name.clone(),
 		keyhash,
@@ -159,7 +173,7 @@ pub fn register(server: State<state::Server>, param: Json<RegisterRequest>)
 		Ok(status) => status,
 		Err(what) => {
 			error!("Error when contacting Redis: {:?}", what);
-			return JsonResponse::fail("database error");
+			return JsonResponse::fail("internal server error");
 		}
 	};
 	debug!("Account creation invoke for {} returned {:?}", param.username, status);
@@ -179,33 +193,81 @@ pub fn register(server: State<state::Server>, param: Json<RegisterRequest>)
         },
 		s @ &_ => {
 			error!("Invalid return from account creation invoke: {}", s);
-			JsonResponse::fail("database error")
+			JsonResponse::fail("internal server error")
 		}
 	}
 }
 
 #[post("/drop", format = "json", data = "<param>")]
-pub fn drop(token: Token, param: Json<DropRequest>) -> Json<DropResponse> {
+pub fn drop(token: Token, param: Json<DropRequest>) -> JsonResponse {
     unimplemented!()
 }
 
 #[post("/transfer", format = "json", data = "<param>")]
-pub fn transfer(token: Token, param: Json<TransferRequest>) -> Json<TransferResponse> {
-    unimplemented!()
+pub fn transfer(server: State<state::Server>, token: Token,
+                param: Json<TransferRequest>) -> JsonResponse {
+    let mut conn = (*server).db_conn.borrow();
+
+    let r = db::transaction(&mut conn, &token.username, &param.0.to, param.0.amount)
+        .map_err(|e| {
+            eprintln!("Transaction error: {}", e);
+            return JsonResponse::error("internal server error");
+        })?;
+
+    use db::TransactionStatus;
+
+    match r {
+        TransactionStatus::Success => JsonResponse::empty_success(),
+        TransactionStatus::NotEnoughFunds =>
+            JsonResponse::fail("not enough funds"),
+        TransactionStatus::InvalidFrom =>
+            JsonResponse::fail("invalid source user (we're as confused as you right now)"),
+        TransactionStatus::InvalidTo =>
+            JsonResponse::fail("invalid destination user"),
+        TransactionStatus::Cooldown =>
+            JsonResponse::fail("please wait before performing this action")
+    }
 }
 
 #[get("/history")]
-pub fn history(token: Token) -> Json<HistoryResponse> {
-    unimplemented!()
+pub fn history(server: State<state::Server>, token: Token) -> JsonResponse {
+    let mut conn = (*server).db_conn.borrow();
+    let h = db::history(&mut conn, &token.username)
+        .map_err(|e| {
+            eprintln!("Error getting history: {}", e);
+            return JsonResponse::error("internal server error");
+        })?;
+
+    let res: Vec<_> = h
+        .into_iter()
+        .map(|e| serde_json::from_str::<HistoryEntry>(&e))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| {
+            eprintln!("Error deserializing history entries: {}", e);
+            return JsonResponse::error("internal server error");
+        })?;
+    JsonResponse::Success(json!({
+        "history": res
+    }))
 }
 
 #[post("/reg/deposit", format = "json", data = "<param>")]
-pub fn deposit(token: Token, param: Json<DepositRequest>) -> Json<DepositResponse> {
-    unimplemented!()
+pub fn deposit(server: State<state::Server>, token: Token, param: Json<DepositRequest>)
+    -> JsonResponse {
+    if !token.is_admin {
+        return JsonResponse::fail("You are not an admin");
+    }
+    let mut conn = (*server).db_conn.borrow();
+    db::deposit(&mut conn, param.0.username, param.0.amount)
+        .map_err(|e| {
+            eprintln!("Error depositing money: {}", e);
+            return JsonResponse::error("internal server error");
+        })?;
+    JsonResponse::empty_success()
 }
 
 pub fn routes() -> Vec<rocket::Route> {
-	routes![home, login, drop, register, transfer, history, deposit]
+	routes![home, info, login, drop, register, transfer, history, deposit]
 }
 
 #[derive(Debug)]
