@@ -1,53 +1,49 @@
 pub fn generate(key: String) -> (String, String) {
-	/* BCrypt only allows for keys with a maximum of 72 bytes. */
-	let pass = key.into_bytes().into_iter().take(72).collect::<Vec<_>>();
-/*	let salt = (0..16)
-		.into_iter()
-		.map(|_| rand::random::<u8>())
-		.collect::<Vec<_>>();
+    /* BCrypt only allows for keys with a maximum of 72 bytes. */
+    let pass = key.into_bytes().into_iter().take(72).collect::<Vec<_>>();
+    /*	let salt = (0..16)
+        .into_iter()
+        .map(|_| rand::random::<u8>())
+        .collect::<Vec<_>>();
 
-	let mut out = [0_u8; 24];
-	bcrypt::bcrypt(bcrypt::DEFAULT_COST / 2, &salt[..], &pass[..], &mut out);
+    let mut out = [0_u8; 24];
+    bcrypt::bcrypt(bcrypt::DEFAULT_COST / 2, &salt[..], &pass[..], &mut out);
 
-	let pass = out.iter()
-		.map(|val| format!("{:02x}", val))
-		.collect::<String>();
-	let salt = salt.iter()
-		.map(|val| format!("{:02x}", val))
-		.collect::<String>();*/
-	
-    let pass = bcrypt::hash(pass, bcrypt::DEFAULT_COST / 2)
-        .expect("oh god oh fuck");
+    let pass = out.iter()
+        .map(|val| format!("{:02x}", val))
+        .collect::<String>();
+    let salt = salt.iter()
+        .map(|val| format!("{:02x}", val))
+        .collect::<String>();*/
 
-	(pass, "".to_owned())
+    let pass = bcrypt::hash(pass, bcrypt::DEFAULT_COST / 2).expect("oh god oh fuck");
+
+    (pass, "".to_owned())
 }
 
 pub enum VerifyError {
-	InvalidHash,
-	InvalidSalt
+    InvalidHash,
+    InvalidSalt,
 }
 
 fn _from_hex(val: &str) -> Result<Vec<u8>, ()> {
-	let chars = val.chars().collect::<Vec<_>>();
-	
-	chars[..]
-		.chunks(2)
-		.map(|chars| {
-			let mut s = String::new();
-			for c in chars { s.push(*c); }
+    let chars = val.chars().collect::<Vec<_>>();
 
-			u8::from_str_radix(s.as_str(), 16)
-				.map_err(|_| ())
-		})
+    chars[..]
+        .chunks(2)
+        .map(|chars| {
+            let mut s = String::new();
+            for c in chars {
+                s.push(*c);
+            }
+
+            u8::from_str_radix(s.as_str(), 16).map_err(|_| ())
+        })
         .collect()
 }
 
-pub fn verify(key: String, hash: String, _salt: String) 
-	-> Result<bool, VerifyError> {
-
-	let pass = key.into_bytes().into_iter().take(72).collect::<Vec<_>>();
-	Ok(
-		bcrypt::verify(&pass[..], hash.as_str())
-			.expect("ALRIGHT WE FUCKED UP WITH BCRYPT PLS HELP ;-;")
-	)
+pub fn verify(key: String, hash: String, _salt: String) -> Result<bool, VerifyError> {
+    let pass = key.into_bytes().into_iter().take(72).collect::<Vec<_>>();
+    Ok(bcrypt::verify(&pass[..], hash.as_str())
+        .expect("ALRIGHT WE FUCKED UP WITH BCRYPT PLS HELP ;-;"))
 }
